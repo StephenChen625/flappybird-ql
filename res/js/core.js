@@ -83,7 +83,7 @@ function first(v) {
 }
 
 function second(v) {
-    return v.length > 1 ? [1] : null;
+    return v.length > 1 ? v[1] : null;
 }
 
 function last(v) {
@@ -109,6 +109,75 @@ function apply(x, funcs) {
         x = f(x);
     });
     return x;
+}
+
+// Q-table utility functions for visualization
+function getQTableStats() {
+    if (!updateQL.Q) return null;
+    
+    var stats = {
+        totalStates: Object.keys(updateQL.Q).length,
+        minQ: Infinity,
+        maxQ: -Infinity,
+        avgQ: 0,
+        stateRange: {
+            minX: Infinity, maxX: -Infinity,
+            minY: Infinity, maxY: -Infinity
+        }
+    };
+    
+    var totalQ = 0;
+    var qCount = 0;
+    
+    Object.keys(updateQL.Q).forEach(function(stateStr) {
+        var stateParts = stateStr.split(',');
+        var x = parseInt(stateParts[0]);
+        var y = parseInt(stateParts[1]);
+        
+        // Update coordinate ranges
+        stats.stateRange.minX = Math.min(stats.stateRange.minX, x);
+        stats.stateRange.maxX = Math.max(stats.stateRange.maxX, x);
+        stats.stateRange.minY = Math.min(stats.stateRange.minY, y);
+        stats.stateRange.maxY = Math.max(stats.stateRange.maxY, y);
+        
+        // Update Q value stats
+        var qValues = updateQL.Q[stateStr];
+        for (var i = 0; i < qValues.length; i++) {
+            stats.minQ = Math.min(stats.minQ, qValues[i]);
+            stats.maxQ = Math.max(stats.maxQ, qValues[i]);
+            totalQ += qValues[i];
+            qCount++;
+        }
+    });
+    
+    stats.avgQ = qCount > 0 ? totalQ / qCount : 0;
+    
+    return stats;
+}
+
+function getCurrentStateInfo(gameState) {
+    if (!updateQL.enabled) return null;
+    
+    var currentState = getQLState(gameState);
+    if (!currentState || !updateQL.Q || !(currentState in updateQL.Q)) {
+        return {
+            state: currentState,
+            hasQValue: false,
+            qValues: null,
+            recommendedAction: null
+        };
+    }
+    
+    var qValues = updateQL.Q[currentState];
+    var recommendedAction = qValues[0] >= qValues[1] ? 0 : 1;
+    
+    return {
+        state: currentState,
+        hasQValue: true,
+        qValues: qValues,
+        recommendedAction: recommendedAction,
+        actionNames: ['Stay', 'Jump']
+    };
 }
 
 function startingState() {
