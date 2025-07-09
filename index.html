@@ -186,34 +186,35 @@
         var qlState = 0;
 
         gameLoop.eachFrame(function (gameState) {
-            if (!panel.is(":visible")) return;
+            // 更新统计面板（只有在可见时）
+            if (panel.is(":visible")) {
+                var newRound = gameState.round;
+                if (round !== newRound) {
+                    round = newRound;
+                    roundSpan.text(round);
+                }
 
-            var newRound = gameState.round;
-            if (round !== newRound) {
-                round = newRound;
-                roundSpan.text(round);
+                var newMaxScore = gameState.maxScore;
+                if (maxScore !== newMaxScore) {
+                    maxScore = newMaxScore;
+                    maxScoreSpan.text(maxScore);
+                }
+
+                var newAverageScore = (round == 0 ? 0 : gameState.totalScore / round).toFixed(3);
+                if (averageScore !== newAverageScore) {
+                    averageScore = newAverageScore;
+                    averageScoreSpan.text(averageScore);
+                }
+
+                var newQLState = updateQL.Q ? Object.keys(updateQL.Q).length : 0;
+                if (qlState !== newQLState) {
+                    qlState = newQLState;
+                    qlStateSpan.text(qlState);
+                }
             }
 
-            var newMaxScore = gameState.maxScore;
-            if (maxScore !== newMaxScore) {
-                maxScore = newMaxScore;
-                maxScoreSpan.text(maxScore);
-            }
-
-            var newAverageScore = (round == 0 ? 0 : gameState.totalScore / round).toFixed(3);
-            if (averageScore !== newAverageScore) {
-                averageScore = newAverageScore;
-                averageScoreSpan.text(averageScore);
-            }
-
-            var newQLState = updateQL.Q ? Object.keys(updateQL.Q).length : 0;
-            if (qlState !== newQLState) {
-                qlState = newQLState;
-                qlStateSpan.text(qlState);
-            }
-
-            // Update Q-table visualization if enabled
-            if (showQTable && updateQL.Q) {
+            // Update Q-table visualization if enabled (独立于统计面板)
+            if (showQTable) {
                 renderQTableVisualization();
             }
         });
@@ -266,9 +267,9 @@
                 var xState = parseInt(stateParts[0]);  // 管道位置状态
                 var yState = parseInt(stateParts[1]);  // 垂直距离状态
                 
-                // 使用更简单的映射逻辑，类似原来的代码
+                // 映射逻辑：让色块移动方向与小鸟移动方向一致
                 var gridX = Math.min(Math.max(xState + 25, 0), gridWidth - 1);
-                var gridY = Math.min(Math.max(-yState + 25, 0), gridHeight - 1);
+                var gridY = Math.min(Math.max(-yState + 25, 0), gridHeight - 1);  // 负向映射，让方向直观
                 
                 // 计算决策倾向：Q(jump) - Q(stay)
                 var jumpQ = updateQL.Q[stateStr][1];    // 跳跃的Q值
@@ -370,8 +371,9 @@
             // 添加说明文字
             ctx.font = "10px Arial";
             ctx.fillStyle = "#666";
-            ctx.fillText("右上角：管道在小鸟前方且上方", canvas.width - 150, 20);
-            ctx.fillText("右下角：管道在小鸟前方且下方", canvas.width - 150, 35);
+            ctx.fillText("上方：管道在小鸟上方时的决策", canvas.width - 180, 20);
+            ctx.fillText("下方：管道在小鸟下方时的决策", canvas.width - 180, 35);
+            ctx.fillText("左右：管道的水平距离", canvas.width - 150, 50);
         }
         
         function getDecisionColor(decisionValue) {
