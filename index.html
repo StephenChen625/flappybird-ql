@@ -14,6 +14,36 @@
             border-radius: 10px;
             background-color: #111;
         }
+        
+        #qtable-canvas {
+            margin-top: 20px;
+            border: 2px solid #333;
+            background-color: white;
+            display: none;
+        }
+        
+        .qtable-controls {
+            margin: 10px 0;
+        }
+        
+        .legend {
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        
+        .legend-item {
+            display: inline-block;
+            margin: 0 10px;
+        }
+        
+        .legend-color {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 1px solid #333;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
     </style>
     <link href="https://cdn.bootcss.com/semantic-ui/2.2.10/semantic.min.css" rel="stylesheet">
 </head>
@@ -60,6 +90,32 @@
             <button id="panel-btn" class="ui button"><i class="bar chart icon"></i></button>
             <button id="inc-fps-btn" class="ui button"><i class="forward icon"></i></button>
         </div>
+        
+        <div class="qtable-controls">
+            <button id="qtable-btn" class="ui basic button">Show Q-table Visualization</button>
+        </div>
+        
+        <canvas id="qtable-canvas" width="600" height="400"></canvas>
+        
+        <div id="qtable-legend" class="legend" style="display: none;">
+            <div class="legend-item">
+                <span class="legend-color" style="background-color: #ff0000;"></span>
+                <span>Dangerous (Q < -10)</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background-color: #ffff00;"></span>
+                <span>Neutral (-10 ≤ Q ≤ 10)</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background-color: #00ff00;"></span>
+                <span>Safe (Q > 10)</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background-color: #ffffff; border: 1px solid #333;"></span>
+                <span>Unexplored</span>
+            </div>
+        </div>
+
         <br>
 
     </center>
@@ -93,6 +149,25 @@
         var panel = $("#panel");
         $("#panel-btn").click(function () {
             panel.toggle();
+        });
+
+        // Q-table visualization controls
+        var qtableCanvas = $("#qtable-canvas");
+        var qtableLegend = $("#qtable-legend");
+        var qtableBtn = $("#qtable-btn");
+        var showQTable = false;
+
+        $("#qtable-btn").click(function () {
+            showQTable = !showQTable;
+            if (showQTable) {
+                qtableCanvas.show();
+                qtableLegend.show();
+                qtableBtn.text("Hide Q-table Visualization");
+            } else {
+                qtableCanvas.hide();
+                qtableLegend.hide();
+                qtableBtn.text("Show Q-table Visualization");
+            }
         });
 
         var fpsSpan = $("#fps-span");
@@ -132,7 +207,103 @@
                 qlState = newQLState;
                 qlStateSpan.text(qlState);
             }
+
+            // Update Q-table visualization if enabled
+            if (showQTable && updateQL.Q) {
+                renderQTableVisualization();
+            }
         });
+
+        // Q-table visualization function
+        function renderQTableVisualization() {
+            var canvas = document.getElementById("qtable-canvas");
+            var ctx = canvas.getContext("2d");
+            
+            // Clear canvas
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            if (!updateQL.Q || Object.keys(updateQL.Q).length === 0) {
+                return;
+            }
+            
+            // Define grid parameters
+            var gridWidth = 50;   // Number of horizontal cells
+            var gridHeight = 40;  // Number of vertical cells
+            var cellWidth = canvas.width / gridWidth;
+            var cellHeight = canvas.height / gridHeight;
+            
+            // Find Q value range for color mapping
+            var qValues = [];
+            Object.keys(updateQL.Q).forEach(function(state) {
+                var maxQ = Math.max(updateQL.Q[state][0], updateQL.Q[state][1]);
+                qValues.push(maxQ);
+            });
+            
+            // Process each state in Q-table
+            Object.keys(updateQL.Q).forEach(function(stateStr) {
+                var stateParts = stateStr.split(',');
+                var xState = parseInt(stateParts[0]);
+                var yState = parseInt(stateParts[1]);
+                
+                // Map state coordinates to grid coordinates
+                // Adjust these mappings based on your state space
+                var gridX = Math.min(Math.max(xState + 25, 0), gridWidth - 1);
+                var gridY = Math.min(Math.max(-yState + 20, 0), gridHeight - 1);
+                
+                // Get the best Q value for this state
+                var qValue = Math.max(updateQL.Q[stateStr][0], updateQL.Q[stateStr][1]);
+                
+                // Map Q value to color
+                var color = getQValueColor(qValue);
+                
+                // Draw cell
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                    gridX * cellWidth, 
+                    gridY * cellHeight, 
+                    cellWidth, 
+                    cellHeight
+                );
+                
+                // Draw border
+                ctx.strokeStyle = "#ccc";
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(
+                    gridX * cellWidth, 
+                    gridY * cellHeight, 
+                    cellWidth, 
+                    cellHeight
+                );
+            });
+            
+            // Draw axes labels
+            ctx.fillStyle = "black";
+            ctx.font = "12px Arial";
+            ctx.fillText("Pipe Position →", canvas.width - 100, canvas.height - 10);
+            ctx.save();
+            ctx.translate(15, canvas.height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText("Bird-Pipe Distance ↑", 0, 0);
+            ctx.restore();
+        }
+        
+        function getQValueColor(qValue) {
+            if (qValue > 10) {
+                // Safe - Green
+                var intensity = Math.min(255, 100 + qValue * 5);
+                return `rgb(0, ${intensity}, 0)`;
+            } else if (qValue < -10) {
+                // Dangerous - Red
+                var intensity = Math.min(255, 100 + Math.abs(qValue) * 2);
+                return `rgb(${intensity}, 0, 0)`;
+            } else {
+                // Neutral - Yellow to white
+                var ratio = (qValue + 10) / 20; // Map [-10, 10] to [0, 1]
+                var intensity = Math.floor(255 * ratio);
+                return `rgb(255, 255, ${intensity})`;
+            }
+        }
 
         gameLoop.start();
     </script>
