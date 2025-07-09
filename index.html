@@ -95,24 +95,28 @@
             <button id="qtable-btn" class="ui basic button">Show Q-table Visualization</button>
         </div>
         
-        <canvas id="qtable-canvas" width="600" height="400"></canvas>
+        <canvas id="qtable-canvas" width="800" height="500"></canvas>
         
         <div id="qtable-legend" class="legend" style="display: none;">
             <div class="legend-item">
-                <span class="legend-color" style="background-color: #ff0000;"></span>
-                <span>Dangerous (Q < -10)</span>
+                <span class="legend-color" style="background-color: #0066cc;"></span>
+                <span>强烈建议不跳跃 (Don't Jump)</span>
             </div>
             <div class="legend-item">
-                <span class="legend-color" style="background-color: #ffff00;"></span>
-                <span>Neutral (-10 ≤ Q ≤ 10)</span>
+                <span class="legend-color" style="background-color: #888888;"></span>
+                <span>跳不跳都差不多 (Neutral)</span>
             </div>
             <div class="legend-item">
-                <span class="legend-color" style="background-color: #00ff00;"></span>
-                <span>Safe (Q > 10)</span>
+                <span class="legend-color" style="background-color: #cc0000;"></span>
+                <span>强烈建议跳跃 (Jump!)</span>
             </div>
             <div class="legend-item">
                 <span class="legend-color" style="background-color: #ffffff; border: 1px solid #333;"></span>
-                <span>Unexplored</span>
+                <span>未探索区域 (Unexplored)</span>
+            </div>
+            <div class="legend-item">
+                <span style="font-weight: bold;">🐦</span>
+                <span>小鸟位置 (Bird Position)</span>
             </div>
         </div>
 
@@ -220,42 +224,58 @@
             var ctx = canvas.getContext("2d");
             
             // Clear canvas
-            ctx.fillStyle = "white";
+            ctx.fillStyle = "#f8f8f8";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             if (!updateQL.Q || Object.keys(updateQL.Q).length === 0) {
+                // Draw empty grid with bird position
+                drawBirdAndAxes(ctx, canvas);
                 return;
             }
             
-            // Define grid parameters
-            var gridWidth = 50;   // Number of horizontal cells
-            var gridHeight = 40;  // Number of vertical cells
+            // Define grid parameters - 更精细的网格
+            var gridWidth = 80;   // 水平格子数（管道位置）
+            var gridHeight = 50;  // 垂直格子数（垂直距离）
             var cellWidth = canvas.width / gridWidth;
             var cellHeight = canvas.height / gridHeight;
             
-            // Find Q value range for color mapping
-            var qValues = [];
+            // 找到状态空间的范围来优化映射
+            var xStates = [], yStates = [];
             Object.keys(updateQL.Q).forEach(function(state) {
-                var maxQ = Math.max(updateQL.Q[state][0], updateQL.Q[state][1]);
-                qValues.push(maxQ);
+                var parts = state.split(',');
+                xStates.push(parseInt(parts[0]));
+                yStates.push(parseInt(parts[1]));
             });
+            
+            var xMin = Math.min(...xStates) - 2;
+            var xMax = Math.max(...xStates) + 2;
+            var yMin = Math.min(...yStates) - 2;
+            var yMax = Math.max(...yStates) + 2;
             
             // Process each state in Q-table
             Object.keys(updateQL.Q).forEach(function(stateStr) {
                 var stateParts = stateStr.split(',');
-                var xState = parseInt(stateParts[0]);
-                var yState = parseInt(stateParts[1]);
+                var xState = parseInt(stateParts[0]);  // 管道位置状态
+                var yState = parseInt(stateParts[1]);  // 垂直距离状态
                 
-                // Map state coordinates to grid coordinates
-                // Adjust these mappings based on your state space
-                var gridX = Math.min(Math.max(xState + 25, 0), gridWidth - 1);
-                var gridY = Math.min(Math.max(-yState + 20, 0), gridHeight - 1);
+                // 映射到画布坐标 - 让小鸟在中心偏左的位置
+                var birdGridX = 20;  // 小鸟在网格中的x位置
+                var birdGridY = 25;  // 小鸟在网格中的y位置
                 
-                // Get the best Q value for this state
-                var qValue = Math.max(updateQL.Q[stateStr][0], updateQL.Q[stateStr][1]);
+                // 计算相对于小鸟的位置
+                var relativeX = xState - xMin;
+                var relativeY = yState - yMin;
                 
-                // Map Q value to color
-                var color = getQValueColor(qValue);
+                var gridX = Math.min(Math.max(birdGridX + relativeX, 0), gridWidth - 1);
+                var gridY = Math.min(Math.max(birdGridY - relativeY, 0), gridHeight - 1);
+                
+                // 计算决策倾向：Q(jump) - Q(stay)
+                var jumpQ = updateQL.Q[stateStr][1];    // 跳跃的Q值
+                var stayQ = updateQL.Q[stateStr][0];    // 不跳跃的Q值
+                var decisionValue = jumpQ - stayQ;      // 正值=应该跳跃，负值=不应该跳跃
+                
+                // 根据决策倾向确定颜色
+                var color = getDecisionColor(decisionValue);
                 
                 // Draw cell
                 ctx.fillStyle = color;
@@ -266,9 +286,9 @@
                     cellHeight
                 );
                 
-                // Draw border
-                ctx.strokeStyle = "#ccc";
-                ctx.lineWidth = 0.5;
+                // Draw subtle border
+                ctx.strokeStyle = "#ddd";
+                ctx.lineWidth = 0.3;
                 ctx.strokeRect(
                     gridX * cellWidth, 
                     gridY * cellHeight, 
@@ -277,31 +297,102 @@
                 );
             });
             
-            // Draw axes labels
+            // 绘制小鸟和坐标轴
+            drawBirdAndAxes(ctx, canvas);
+        }
+        
+        function drawBirdAndAxes(ctx, canvas) {
+            var gridWidth = 80;
+            var gridHeight = 50;
+            var cellWidth = canvas.width / gridWidth;
+            var cellHeight = canvas.height / gridHeight;
+            
+            // 小鸟的位置（网格坐标）
+            var birdGridX = 20;
+            var birdGridY = 25;
+            var birdX = birdGridX * cellWidth + cellWidth/2;
+            var birdY = birdGridY * cellHeight + cellHeight/2;
+            
+            // 画小鸟
+            ctx.fillStyle = "#FFD700";
+            ctx.strokeStyle = "#FF8C00";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(birdX, birdY, 8, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+            
+            // 画小鸟的眼睛
             ctx.fillStyle = "black";
+            ctx.beginPath();
+            ctx.arc(birdX + 3, birdY - 2, 2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // 画参考线（十字线）
+            ctx.strokeStyle = "#666";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            
+            // 垂直参考线
+            ctx.beginPath();
+            ctx.moveTo(birdX, 0);
+            ctx.lineTo(birdX, canvas.height);
+            ctx.stroke();
+            
+            // 水平参考线
+            ctx.beginPath();
+            ctx.moveTo(0, birdY);
+            ctx.lineTo(canvas.width, birdY);
+            ctx.stroke();
+            
+            ctx.setLineDash([]);
+            
+            // 坐标轴标签
+            ctx.fillStyle = "black";
+            ctx.font = "bold 14px Arial";
+            ctx.fillText("🐦 Bird", birdX - 20, birdY - 15);
+            
             ctx.font = "12px Arial";
-            ctx.fillText("Pipe Position →", canvas.width - 100, canvas.height - 10);
+            ctx.fillText("管道水平距离 →", canvas.width - 120, canvas.height - 10);
+            
             ctx.save();
             ctx.translate(15, canvas.height / 2);
             ctx.rotate(-Math.PI / 2);
-            ctx.fillText("Bird-Pipe Distance ↑", 0, 0);
+            ctx.fillText("管道垂直距离 ↑", 0, 0);
             ctx.restore();
+            
+            // 添加说明文字
+            ctx.font = "10px Arial";
+            ctx.fillStyle = "#666";
+            ctx.fillText("右上角：管道在小鸟前方且上方", canvas.width - 150, 20);
+            ctx.fillText("右下角：管道在小鸟前方且下方", canvas.width - 150, 35);
         }
         
-        function getQValueColor(qValue) {
-            if (qValue > 10) {
-                // Safe - Green
-                var intensity = Math.min(255, 100 + qValue * 5);
-                return `rgb(0, ${intensity}, 0)`;
-            } else if (qValue < -10) {
-                // Dangerous - Red
-                var intensity = Math.min(255, 100 + Math.abs(qValue) * 2);
-                return `rgb(${intensity}, 0, 0)`;
+        function getDecisionColor(decisionValue) {
+            // decisionValue = Q(jump) - Q(stay)
+            // 正值越大 = 越应该跳跃 = 越红
+            // 负值越大 = 越不应该跳跃 = 越蓝
+            // 接近0 = 无所谓 = 灰色
+            
+            var maxIntensity = 20; // 当差值超过这个值时，颜色达到最深
+            var normalizedValue = Math.max(-maxIntensity, Math.min(maxIntensity, decisionValue)) / maxIntensity;
+            
+            if (normalizedValue > 0.1) {
+                // 建议跳跃 - 红色系
+                var intensity = Math.floor(255 * normalizedValue);
+                var green = Math.floor(100 * (1 - normalizedValue));
+                var blue = Math.floor(100 * (1 - normalizedValue));
+                return `rgb(${intensity}, ${green}, ${blue})`;
+            } else if (normalizedValue < -0.1) {
+                // 建议不跳跃 - 蓝色系
+                var intensity = Math.floor(255 * Math.abs(normalizedValue));
+                var red = Math.floor(100 * (1 - Math.abs(normalizedValue)));
+                var green = Math.floor(150 * (1 - Math.abs(normalizedValue)));
+                return `rgb(${red}, ${green}, ${intensity})`;
             } else {
-                // Neutral - Yellow to white
-                var ratio = (qValue + 10) / 20; // Map [-10, 10] to [0, 1]
-                var intensity = Math.floor(255 * ratio);
-                return `rgb(255, 255, ${intensity})`;
+                // 中性决策 - 灰色
+                var grayLevel = 180;
+                return `rgb(${grayLevel}, ${grayLevel}, ${grayLevel})`;
             }
         }
 
