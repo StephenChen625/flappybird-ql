@@ -230,6 +230,13 @@
             if (!updateQL.Q || Object.keys(updateQL.Q).length === 0) {
                 // Draw empty grid with bird position
                 drawBirdAndAxes(ctx, canvas);
+                
+                // 显示提示信息
+                ctx.fillStyle = "black";
+                ctx.font = "16px Arial";
+                ctx.fillText("等待Q-learning数据...", canvas.width/2 - 80, 50);
+                ctx.font = "12px Arial";
+                ctx.fillText("请启用Q-learning并让AI训练一段时间", canvas.width/2 - 120, 70);
                 return;
             }
             
@@ -247,10 +254,11 @@
                 yStates.push(parseInt(parts[1]));
             });
             
-            var xMin = Math.min(...xStates) - 2;
-            var xMax = Math.max(...xStates) + 2;
-            var yMin = Math.min(...yStates) - 2;
-            var yMax = Math.max(...yStates) + 2;
+            // 使用兼容的方式计算最值
+            var xMin = xStates.length > 0 ? Math.min.apply(Math, xStates) - 2 : -10;
+            var xMax = xStates.length > 0 ? Math.max.apply(Math, xStates) + 2 : 10;
+            var yMin = yStates.length > 0 ? Math.min.apply(Math, yStates) - 2 : -10;
+            var yMax = yStates.length > 0 ? Math.max.apply(Math, yStates) + 2 : 10;
             
             // Process each state in Q-table
             Object.keys(updateQL.Q).forEach(function(stateStr) {
@@ -258,16 +266,9 @@
                 var xState = parseInt(stateParts[0]);  // 管道位置状态
                 var yState = parseInt(stateParts[1]);  // 垂直距离状态
                 
-                // 映射到画布坐标 - 让小鸟在中心偏左的位置
-                var birdGridX = 20;  // 小鸟在网格中的x位置
-                var birdGridY = 25;  // 小鸟在网格中的y位置
-                
-                // 计算相对于小鸟的位置
-                var relativeX = xState - xMin;
-                var relativeY = yState - yMin;
-                
-                var gridX = Math.min(Math.max(birdGridX + relativeX, 0), gridWidth - 1);
-                var gridY = Math.min(Math.max(birdGridY - relativeY, 0), gridHeight - 1);
+                // 使用更简单的映射逻辑，类似原来的代码
+                var gridX = Math.min(Math.max(xState + 25, 0), gridWidth - 1);
+                var gridY = Math.min(Math.max(-yState + 25, 0), gridHeight - 1);
                 
                 // 计算决策倾向：Q(jump) - Q(stay)
                 var jumpQ = updateQL.Q[stateStr][1];    // 跳跃的Q值
@@ -299,6 +300,11 @@
             
             // 绘制小鸟和坐标轴
             drawBirdAndAxes(ctx, canvas);
+            
+            // 显示状态数量信息
+            ctx.fillStyle = "black";
+            ctx.font = "12px Arial";
+            ctx.fillText("Q表状态数: " + Object.keys(updateQL.Q).length, 10, 20);
         }
         
         function drawBirdAndAxes(ctx, canvas) {
@@ -307,9 +313,9 @@
             var cellWidth = canvas.width / gridWidth;
             var cellHeight = canvas.height / gridHeight;
             
-            // 小鸟的位置（网格坐标）
-            var birdGridX = 20;
-            var birdGridY = 25;
+            // 小鸟的位置（网格坐标）- 对应映射逻辑
+            var birdGridX = 25;  // 对应 xState=0 的位置
+            var birdGridY = 25;  // 对应 yState=0 的位置
             var birdX = birdGridX * cellWidth + cellWidth/2;
             var birdY = birdGridY * cellHeight + cellHeight/2;
             
