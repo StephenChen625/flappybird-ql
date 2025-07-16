@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Flappy Bird Q-learning</title>
+    <title>Flappy Bird Q-learning & DQN</title>
     <style>
         canvas {
             margin-top: 15px;
@@ -15,15 +15,53 @@
             background-color: #111;
         }
         
-        #qtable-canvas {
+        #qtable-canvas, #dqn-network-canvas, #dqn-charts-canvas {
             margin-top: 20px;
             border: 2px solid #333;
             background-color: white;
             display: none;
         }
         
-        .qtable-controls {
+        .tab-container {
+            margin: 20px 0;
+        }
+        
+        .tab-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .tab-button {
+            padding: 10px 20px;
+            border: 2px solid #333;
+            background-color: #f8f8f8;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        
+        .tab-button.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .controls-row {
             margin: 10px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         
         .legend {
@@ -52,6 +90,40 @@
             color: #333;
         }
         
+        .dqn-info {
+            margin: 10px 0;
+            font-size: 14px;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .network-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .stat-item {
+            text-align: center;
+            background-color: #f8f8f8;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .stat-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        
         footer {
             margin-top: 40px;
             width: 100%;
@@ -67,7 +139,7 @@
 
 <body>
     <center>
-        <h1 class="main-title">Flappy Bird Q-learning 可视化演示</h1>
+        <h1 class="main-title">Flappy Bird Q-learning & DQN 可视化演示</h1>
         
         <canvas id="cvs" width="288" height="512"></canvas>
         <br>
@@ -87,50 +159,126 @@
                     <td> <span id="round-span">0</span></td>
                 </tr>
                 <tr>
-                    <td>Number of Q-learning States</td>
+                    <td>Number of States/Experiences</td>
                     <td> <span id="qstate-span">0</span></td>
                 </tr>
             </tbody>
         </table>
 
-        <button id="ql-btn" class="ui basic button">Enable Q-learning</button>
-        <div class="ui basic icon buttons">
-            <button id="dec-fps-btn" class="ui button"><i class="backward icon"></i></button>
-            <button id="rst-fps-btn" class="ui button"><i class="undo icon"></i></button>
-            <button id="panel-btn" class="ui button"><i class="bar chart icon"></i></button>
-            <button id="inc-fps-btn" class="ui button"><i class="forward icon"></i></button>
-        </div>
-        
-        <div class="qtable-controls">
-            <button id="qtable-btn" class="ui basic button">Show Q-table Visualization</button>
-        </div>
-        
-        <canvas id="qtable-canvas" width="800" height="500"></canvas>
-        
-        <div id="qtable-legend" class="legend" style="display: none;">
-            <div class="legend-item">
-                <span class="legend-color" style="background-color: #0000cc;"></span>
-                <span>强烈建议不跳跃 (Don't Jump)</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-color" style="background-color: #a0a0a0;"></span>
-                <span>跳不跳都差不多 (Neutral)</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-color" style="background-color: #cc0000;"></span>
-                <span>强烈建议跳跃 (Jump!)</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-color" style="background-color: #ffffff; border: 1px solid #333;"></span>
-                <span>未探索区域 (Unexplored)</span>
-            </div>
-            <div class="legend-item">
-                <span style="font-weight: bold;">🐦</span>
-                <span>小鸟位置 (Bird Position)</span>
+        <div class="controls-row">
+            <button id="ql-btn" class="ui basic button">Enable Q-learning</button>
+            <button id="dqn-btn" class="ui basic button">Enable DQN</button>
+            <div class="ui basic icon buttons">
+                <button id="dec-fps-btn" class="ui button"><i class="backward icon"></i></button>
+                <button id="rst-fps-btn" class="ui button"><i class="undo icon"></i></button>
+                <button id="panel-btn" class="ui button"><i class="bar chart icon"></i></button>
+                <button id="inc-fps-btn" class="ui button"><i class="forward icon"></i></button>
             </div>
         </div>
-
-        <br>
+        
+        <!-- Tab Container -->
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <div class="tab-button active" data-tab="qtable">Q-table 可视化</div>
+                <div class="tab-button" data-tab="dqn">DQN 神经网络</div>
+            </div>
+            
+            <!-- Q-table Tab -->
+            <div class="tab-content active" id="qtable-tab">
+                <div class="controls-row">
+                    <button id="qtable-btn" class="ui basic button">Show Q-table Visualization</button>
+                </div>
+                
+                <canvas id="qtable-canvas" width="800" height="500"></canvas>
+                
+                <div id="qtable-legend" class="legend" style="display: none;">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #0000cc;"></span>
+                        <span>强烈建议不跳跃 (Don't Jump)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #a0a0a0;"></span>
+                        <span>跳不跳都差不多 (Neutral)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #cc0000;"></span>
+                        <span>强烈建议跳跃 (Jump!)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ffffff; border: 1px solid #333;"></span>
+                        <span>未探索区域 (Unexplored)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span style="font-weight: bold;">🐦</span>
+                        <span>小鸟位置 (Bird Position)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- DQN Tab -->
+            <div class="tab-content" id="dqn-tab">
+                <div class="controls-row">
+                    <button id="dqn-viz-btn" class="ui basic button">Show DQN Network</button>
+                    <button id="dqn-charts-btn" class="ui basic button">Show Training Charts</button>
+                    <button id="dqn-reset-btn" class="ui basic button">Reset DQN</button>
+                </div>
+                
+                <div class="dqn-info">
+                    <strong>DQN 网络结构:</strong> 输入层(4) → 隐藏层1(12) → 隐藏层2(8) → 输出层(2)<br>
+                    <strong>输入特征:</strong> 管道水平距离, 管道垂直距离, 小鸟速度, 距地面距离<br>
+                    <strong>输出:</strong> Q(不跳跃), Q(跳跃)
+                </div>
+                
+                <div class="network-stats" id="dqn-stats">
+                    <div class="stat-item">
+                        <div class="stat-label">学习率</div>
+                        <div class="stat-value" id="learning-rate">0.001</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">ε-贪婪</div>
+                        <div class="stat-value" id="epsilon-value">1.0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">经验缓冲</div>
+                        <div class="stat-value" id="replay-size">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">损失</div>
+                        <div class="stat-value" id="current-loss">0.0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">平均奖励</div>
+                        <div class="stat-value" id="avg-reward">0.0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">训练步数</div>
+                        <div class="stat-value" id="train-steps">0</div>
+                    </div>
+                </div>
+                
+                <canvas id="dqn-network-canvas" width="800" height="400"></canvas>
+                <canvas id="dqn-charts-canvas" width="800" height="300"></canvas>
+                
+                <div id="dqn-legend" class="legend" style="display: none;">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ff6b6b;"></span>
+                        <span>正权重 (Positive Weights)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #4ecdc4;"></span>
+                        <span>负权重 (Negative Weights)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #45b7d1;"></span>
+                        <span>高激活 (High Activation)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #f9ca24;"></span>
+                        <span>输出层 (Output Layer)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
     </center>
 
@@ -139,16 +287,53 @@
     </footer>
 
     <script src="https://cdn.bootcss.com/jquery/2.2.4/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="res/js/core.js"></script>
 
     <script>
+        // Tab management
+        $('.tab-button').click(function() {
+            const tabName = $(this).data('tab');
+            
+            // Update button states
+            $('.tab-button').removeClass('active');
+            $(this).addClass('active');
+            
+            // Update content visibility
+            $('.tab-content').removeClass('active');
+            $('#' + tabName + '-tab').addClass('active');
+        });
+
+        // Original Q-learning controls
         var qlBtn = document.getElementById("ql-btn");
         $("#ql-btn").click(function () {
             updateQL.enabled = !updateQL.enabled;
             if (updateQL.enabled) {
                 qlBtn.innerText = "Disable Q-learning";
+                // Disable DQN when Q-learning is enabled
+                if (window.dqnAgent && window.dqnAgent.enabled) {
+                    $("#dqn-btn").click();
+                }
             } else {
                 qlBtn.innerText = "Enable Q-learning";
+            }
+        });
+
+        // DQN controls
+        var dqnBtn = document.getElementById("dqn-btn");
+        $("#dqn-btn").click(function () {
+            if (!window.dqnAgent) {
+                initializeDQN();
+            }
+            window.dqnAgent.enabled = !window.dqnAgent.enabled;
+            if (window.dqnAgent.enabled) {
+                dqnBtn.innerText = "Disable DQN";
+                // Disable Q-learning when DQN is enabled
+                if (updateQL.enabled) {
+                    $("#ql-btn").click();
+                }
+            } else {
+                dqnBtn.innerText = "Enable DQN";
             }
         });
 
@@ -188,6 +373,48 @@
             }
         });
 
+        // DQN visualization controls
+        var dqnNetworkCanvas = $("#dqn-network-canvas");
+        var dqnChartsCanvas = $("#dqn-charts-canvas");
+        var dqnLegend = $("#dqn-legend");
+        var showDQNNetwork = false;
+        var showDQNCharts = false;
+
+        $("#dqn-viz-btn").click(function () {
+            showDQNNetwork = !showDQNNetwork;
+            if (showDQNNetwork) {
+                dqnNetworkCanvas.show();
+                dqnLegend.show();
+                $("#dqn-viz-btn").text("Hide DQN Network");
+            } else {
+                dqnNetworkCanvas.hide();
+                dqnLegend.hide();
+                $("#dqn-viz-btn").text("Show DQN Network");
+            }
+        });
+
+        $("#dqn-charts-btn").click(function () {
+            showDQNCharts = !showDQNCharts;
+            if (showDQNCharts) {
+                dqnChartsCanvas.show();
+                $("#dqn-charts-btn").text("Hide Training Charts");
+            } else {
+                dqnChartsCanvas.hide();
+                $("#dqn-charts-btn").text("Show Training Charts");
+            }
+        });
+
+        $("#dqn-reset-btn").click(function () {
+            if (window.dqnAgent) {
+                initializeDQN();
+                $("#current-loss").text("0.0");
+                $("#avg-reward").text("0.0");
+                $("#train-steps").text("0");
+                $("#replay-size").text("0");
+                $("#epsilon-value").text("1.0");
+            }
+        });
+
         var fpsSpan = $("#fps-span");
         var roundSpan = $("#round-span");
         var maxScoreSpan = $("#mscore-span");
@@ -199,8 +426,586 @@
         var averageScore = 0;
         var qlState = 0;
 
+        // ====== DQN Implementation ======
+        class DQNAgent {
+            constructor() {
+                this.enabled = false;
+                this.model = null;
+                this.targetModel = null;
+                this.replayBuffer = [];
+                this.maxBufferSize = 10000;
+                this.batchSize = 32;
+                this.learningRate = 0.001;
+                this.epsilon = 1.0;
+                this.epsilonMin = 0.01;
+                this.epsilonDecay = 0.995;
+                this.gamma = 0.95;
+                this.targetUpdateFreq = 100;
+                this.trainStep = 0;
+                this.lastState = null;
+                this.lastAction = null;
+                this.totalReward = 0;
+                this.rewardHistory = [];
+                this.lossHistory = [];
+                this.currentLoss = 0;
+            }
+
+            async createModel() {
+                const model = tf.sequential({
+                    layers: [
+                        tf.layers.dense({
+                            inputShape: [4],
+                            units: 12,
+                            activation: 'relu',
+                            kernelInitializer: 'varianceScaling',
+                            name: 'hidden1'
+                        }),
+                        tf.layers.dense({
+                            units: 8,
+                            activation: 'relu',
+                            kernelInitializer: 'varianceScaling',
+                            name: 'hidden2'
+                        }),
+                        tf.layers.dense({
+                            units: 2,
+                            activation: 'linear',
+                            kernelInitializer: 'varianceScaling',
+                            name: 'output'
+                        })
+                    ]
+                });
+
+                model.compile({
+                    optimizer: tf.train.adam(this.learningRate),
+                    loss: 'meanSquaredError'
+                });
+
+                return model;
+            }
+
+            async initialize() {
+                this.model = await this.createModel();
+                this.targetModel = await this.createModel();
+                this.updateTargetModel();
+            }
+
+            updateTargetModel() {
+                const weights = this.model.getWeights();
+                this.targetModel.setWeights(weights);
+            }
+
+            getState(gameState) {
+                const pipeList = gameState.pipeList.filter(pipe => 
+                    birdX < pipe.curX + pipeWidth
+                ).sort((a, b) => a.curX - b.curX);
+
+                if (pipeList.length === 0) return null;
+
+                const firstPipe = pipeList[0];
+                const birdY = gameState.birdY;
+                const curFrame = gameState.curFrame;
+                const jumpFrame = gameState.jumpFrame;
+                
+                // Calculate bird velocity
+                const birdVel = Math.min(jumpVel + gravity * (curFrame - jumpFrame), maxFallVel);
+                
+                return [
+                    (firstPipe.curX - birdX) / 100.0,  // Horizontal distance (normalized)
+                    (firstPipe.gapTop + pipeGap/2 - birdY) / 100.0,  // Vertical distance to gap center
+                    birdVel / 20.0,  // Bird velocity (normalized)
+                    (landY - birdY) / 100.0  // Distance to ground (normalized)
+                ];
+            }
+
+            selectAction(state) {
+                if (Math.random() < this.epsilon) {
+                    return Math.random() < 0.5 ? 0 : 1;  // Random action
+                }
+
+                const stateTensor = tf.tensor2d([state]);
+                const qValues = this.model.predict(stateTensor);
+                const action = qValues.argMax(1).dataSync()[0];
+                
+                stateTensor.dispose();
+                qValues.dispose();
+                
+                return action;
+            }
+
+            addExperience(state, action, reward, nextState, done) {
+                this.replayBuffer.push({ state, action, reward, nextState, done });
+                if (this.replayBuffer.length > this.maxBufferSize) {
+                    this.replayBuffer.shift();
+                }
+            }
+
+            async train() {
+                if (this.replayBuffer.length < this.batchSize) return;
+
+                // Sample random batch
+                const batch = [];
+                for (let i = 0; i < this.batchSize; i++) {
+                    const idx = Math.floor(Math.random() * this.replayBuffer.length);
+                    batch.push(this.replayBuffer[idx]);
+                }
+
+                const states = batch.map(exp => exp.state);
+                const nextStates = batch.map(exp => exp.nextState).filter(s => s !== null);
+                
+                const qValues = this.model.predict(tf.tensor2d(states));
+                const nextQValues = nextStates.length > 0 ? 
+                    this.targetModel.predict(tf.tensor2d(nextStates)) : null;
+
+                const targets = qValues.arraySync();
+                let nextQIndex = 0;
+
+                for (let i = 0; i < batch.length; i++) {
+                    const exp = batch[i];
+                    if (exp.done) {
+                        targets[i][exp.action] = exp.reward;
+                    } else {
+                        const nextQArray = nextQValues.arraySync()[nextQIndex];
+                        const maxNextQ = Math.max(...nextQArray);
+                        targets[i][exp.action] = exp.reward + this.gamma * maxNextQ;
+                        nextQIndex++;
+                    }
+                }
+
+                const targetTensor = tf.tensor2d(targets);
+                const stateTensor = tf.tensor2d(states);
+
+                const history = await this.model.fit(stateTensor, targetTensor, {
+                    epochs: 1,
+                    verbose: 0
+                });
+
+                this.currentLoss = history.history.loss[0];
+                this.lossHistory.push(this.currentLoss);
+                if (this.lossHistory.length > 100) this.lossHistory.shift();
+
+                // Clean up tensors
+                qValues.dispose();
+                if (nextQValues) nextQValues.dispose();
+                targetTensor.dispose();
+                stateTensor.dispose();
+
+                // Update target network
+                this.trainStep++;
+                if (this.trainStep % this.targetUpdateFreq === 0) {
+                    this.updateTargetModel();
+                }
+
+                // Decay epsilon
+                this.epsilon = Math.max(this.epsilonMin, this.epsilon * this.epsilonDecay);
+            }
+
+            processGameState(gameState) {
+                if (!this.enabled) return gameState;
+
+                const currentState = this.getState(gameState);
+                if (!currentState) return gameState;
+
+                if (gameState.mode === "playing") {
+                    // Select action
+                    const action = this.selectAction(currentState);
+                    
+                    // Store experience from previous step
+                    if (this.lastState && this.lastAction !== null) {
+                        const reward = 1; // Alive reward
+                        this.addExperience(this.lastState, this.lastAction, reward, currentState, false);
+                        this.totalReward += reward;
+                    }
+
+                    // Execute action
+                    if (action === 1) {
+                        gameState = jump(gameState);
+                    }
+
+                    this.lastState = currentState;
+                    this.lastAction = action;
+                    
+                } else if (gameState.mode === "dead") {
+                    // Store death experience
+                    if (this.lastState && this.lastAction !== null) {
+                        const reward = -100; // Death penalty
+                        this.addExperience(this.lastState, this.lastAction, reward, null, true);
+                        this.totalReward += reward;
+                    }
+
+                    // Train the network
+                    this.train();
+
+                    // Update reward history
+                    this.rewardHistory.push(this.totalReward);
+                    if (this.rewardHistory.length > 100) this.rewardHistory.shift();
+
+                    // Reset for next episode
+                    this.lastState = null;
+                    this.lastAction = null;
+                    this.totalReward = 0;
+
+                    // Auto restart
+                    gameState = jump(gameState);
+                }
+
+                return gameState;
+            }
+
+            getNetworkWeights() {
+                if (!this.model) return null;
+                
+                const weights = this.model.getWeights();
+                return weights.map(w => w.arraySync());
+            }
+        }
+
+        async function initializeDQN() {
+            window.dqnAgent = new DQNAgent();
+            await window.dqnAgent.initialize();
+            console.log("DQN Agent initialized!");
+        }
+
+        // ====== Visualization Functions ======
+        
+        // Q-table visualization (existing)
+        function renderQTableVisualization() {
+            var canvas = document.getElementById("qtable-canvas");
+            var ctx = canvas.getContext("2d");
+            
+            ctx.fillStyle = "#f8f8f8";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            if (!updateQL.Q || Object.keys(updateQL.Q).length === 0) {
+                drawBirdAndAxes(ctx, canvas);
+                ctx.fillStyle = "black";
+                ctx.font = "16px Arial";
+                ctx.fillText("等待Q-learning数据...", canvas.width/2 - 80, 50);
+                ctx.font = "12px Arial";
+                ctx.fillText("请启用Q-learning并让AI训练一段时间", canvas.width/2 - 120, 70);
+                return;
+            }
+            
+            var gridWidth = 80;
+            var gridHeight = 50;
+            var cellWidth = canvas.width / gridWidth;
+            var cellHeight = canvas.height / gridHeight;
+            
+            var xStates = [], yStates = [];
+            Object.keys(updateQL.Q).forEach(function(state) {
+                var parts = state.split(',');
+                xStates.push(parseInt(parts[0]));
+                yStates.push(parseInt(parts[1]));
+            });
+            
+            var xMin = xStates.length > 0 ? Math.min.apply(Math, xStates) - 2 : -10;
+            var xMax = xStates.length > 0 ? Math.max.apply(Math, xStates) + 2 : 10;
+            var yMin = yStates.length > 0 ? Math.min.apply(Math, yStates) - 2 : -10;
+            var yMax = yStates.length > 0 ? Math.max.apply(Math, yStates) + 2 : 10;
+            
+            Object.keys(updateQL.Q).forEach(function(stateStr) {
+                var stateParts = stateStr.split(',');
+                var xState = parseInt(stateParts[0]);
+                var yState = parseInt(stateParts[1]);
+                
+                var gridX = Math.min(Math.max(xState + 25, 0), gridWidth - 1);
+                var gridY = Math.min(Math.max(yState + 25, 0), gridHeight - 1);
+                
+                var jumpQ = updateQL.Q[stateStr][1];
+                var stayQ = updateQL.Q[stateStr][0];
+                var decisionValue = jumpQ - stayQ;
+                
+                var color = getDecisionColor(decisionValue);
+                
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                    gridX * cellWidth, 
+                    gridY * cellHeight, 
+                    cellWidth, 
+                    cellHeight
+                );
+                
+                ctx.strokeStyle = "#ddd";
+                ctx.lineWidth = 0.3;
+                ctx.strokeRect(
+                    gridX * cellWidth, 
+                    gridY * cellHeight, 
+                    cellWidth, 
+                    cellHeight
+                );
+            });
+            
+            drawBirdAndAxes(ctx, canvas);
+            ctx.fillStyle = "black";
+            ctx.font = "12px Arial";
+            ctx.fillText("Q表状态数: " + Object.keys(updateQL.Q).length, 10, 20);
+        }
+        
+        function drawBirdAndAxes(ctx, canvas) {
+            var gridWidth = 80;
+            var gridHeight = 50;
+            var cellWidth = canvas.width / gridWidth;
+            var cellHeight = canvas.height / gridHeight;
+            
+            var birdGridX = 25;
+            var birdGridY = 25;
+            var birdX = birdGridX * cellWidth + cellWidth/2;
+            var birdY = birdGridY * cellHeight + cellHeight/2;
+            
+            ctx.fillStyle = "#FFD700";
+            ctx.strokeStyle = "#FF8C00";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(birdX, birdY, 8, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+            
+            ctx.fillStyle = "black";
+            ctx.beginPath();
+            ctx.arc(birdX + 3, birdY - 2, 2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.strokeStyle = "#666";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            
+            ctx.beginPath();
+            ctx.moveTo(birdX, 0);
+            ctx.lineTo(birdX, canvas.height);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(0, birdY);
+            ctx.lineTo(canvas.width, birdY);
+            ctx.stroke();
+            
+            ctx.setLineDash([]);
+            
+            ctx.fillStyle = "black";
+            ctx.font = "bold 14px Arial";
+            ctx.fillText("🐦 Bird", birdX - 20, birdY - 15);
+            
+            ctx.font = "12px Arial";
+            ctx.fillText("管道水平距离 →", canvas.width - 120, canvas.height - 10);
+            
+            ctx.save();
+            ctx.translate(15, canvas.height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText("管道相对小鸟位置 ↑", 0, 0);
+            ctx.restore();
+            
+            ctx.fillText("管道相对更下方", 15, canvas.height - 30);
+            
+            ctx.font = "10px Arial";
+            ctx.fillStyle = "#666";
+            ctx.fillText("小鸟下落时，色块向上移动", canvas.width - 180, 20);
+            ctx.fillText("表示管道相对位置上升", canvas.width - 160, 35);
+            ctx.fillText("横轴：管道水平距离", canvas.width - 140, 50);
+        }
+        
+        function getDecisionColor(decisionValue) {
+            var threshold = 2;
+            
+            if (decisionValue > threshold) {
+                var intensity = Math.min(255, Math.max(150, Math.abs(decisionValue) * 10));
+                return `rgb(${intensity}, 0, 0)`;
+            } else if (decisionValue < -threshold) {
+                var intensity = Math.min(255, Math.max(150, Math.abs(decisionValue) * 10));
+                return `rgb(0, 0, ${intensity})`;
+            } else {
+                return `rgb(160, 160, 160)`;
+            }
+        }
+
+        // DQN Network visualization
+        function renderDQNNetwork() {
+            if (!window.dqnAgent || !window.dqnAgent.model) return;
+            
+            const canvas = document.getElementById("dqn-network-canvas");
+            const ctx = canvas.getContext("2d");
+            
+            // Clear canvas
+            ctx.fillStyle = "#f8f8f8";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Network layout
+            const layers = [
+                { name: "Input", neurons: 4, x: 100, labels: ["管道距离", "垂直距离", "小鸟速度", "距地面"] },
+                { name: "Hidden1", neurons: 12, x: 300 },
+                { name: "Hidden2", neurons: 8, x: 500 },
+                { name: "Output", neurons: 2, x: 700, labels: ["Q(不跳)", "Q(跳跃)"] }
+            ];
+            
+            const neuronRadius = 12;
+            const layerHeight = canvas.height - 80;
+            
+            try {
+                const weights = window.dqnAgent.getNetworkWeights();
+                
+                // Draw connections with weights
+                for (let i = 0; i < layers.length - 1; i++) {
+                    const currentLayer = layers[i];
+                    const nextLayer = layers[i + 1];
+                    
+                    if (weights && weights[i * 2]) { // weights come in pairs (weights, biases)
+                        const weightMatrix = weights[i * 2];
+                        const maxWeight = Math.max(...weightMatrix.flat().map(Math.abs));
+                        
+                        for (let j = 0; j < currentLayer.neurons; j++) {
+                            for (let k = 0; k < nextLayer.neurons; k++) {
+                                const weight = weightMatrix[j][k];
+                                const thickness = Math.abs(weight) / maxWeight * 3;
+                                const color = weight > 0 ? `rgba(255, 107, 107, ${Math.abs(weight) / maxWeight})` 
+                                                         : `rgba(78, 205, 196, ${Math.abs(weight) / maxWeight})`;
+                                
+                                const x1 = currentLayer.x + neuronRadius;
+                                const y1 = 40 + (j + 0.5) * layerHeight / currentLayer.neurons;
+                                const x2 = nextLayer.x - neuronRadius;
+                                const y2 = 40 + (k + 0.5) * layerHeight / nextLayer.neurons;
+                                
+                                ctx.strokeStyle = color;
+                                ctx.lineWidth = Math.max(0.5, thickness);
+                                ctx.beginPath();
+                                ctx.moveTo(x1, y1);
+                                ctx.lineTo(x2, y2);
+                                ctx.stroke();
+                            }
+                        }
+                    }
+                }
+                
+                // Draw neurons
+                layers.forEach((layer, layerIndex) => {
+                    for (let i = 0; i < layer.neurons; i++) {
+                        const x = layer.x;
+                        const y = 40 + (i + 0.5) * layerHeight / layer.neurons;
+                        
+                        // Neuron color based on layer
+                        let color = "#45b7d1";
+                        if (layerIndex === 0) color = "#96ceb4"; // Input
+                        else if (layerIndex === layers.length - 1) color = "#f9ca24"; // Output
+                        
+                        ctx.fillStyle = color;
+                        ctx.strokeStyle = "#333";
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(x, y, neuronRadius, 0, 2 * Math.PI);
+                        ctx.fill();
+                        ctx.stroke();
+                        
+                        // Neuron labels
+                        if (layer.labels && layer.labels[i]) {
+                            ctx.fillStyle = "black";
+                            ctx.font = "10px Arial";
+                            ctx.textAlign = layerIndex === 0 ? "right" : "left";
+                            const textX = layerIndex === 0 ? x - neuronRadius - 5 : x + neuronRadius + 5;
+                            ctx.fillText(layer.labels[i], textX, y + 3);
+                        }
+                    }
+                    
+                    // Layer labels
+                    ctx.fillStyle = "black";
+                    ctx.font = "bold 14px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText(layer.name, layer.x, 25);
+                    ctx.fillText(`(${layer.neurons})`, layer.x, canvas.height - 10);
+                });
+                
+            } catch (error) {
+                ctx.fillStyle = "red";
+                ctx.font = "16px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("网络权重加载中...", canvas.width / 2, canvas.height / 2);
+            }
+        }
+
+        // DQN Training charts
+        function renderDQNCharts() {
+            if (!window.dqnAgent) return;
+            
+            const canvas = document.getElementById("dqn-charts-canvas");
+            const ctx = canvas.getContext("2d");
+            
+            ctx.fillStyle = "#f8f8f8";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const chartWidth = canvas.width / 2 - 40;
+            const chartHeight = canvas.height - 80;
+            
+            // Loss chart
+            drawChart(ctx, 20, 40, chartWidth, chartHeight, 
+                     window.dqnAgent.lossHistory, "Loss", "#ff6b6b");
+            
+            // Reward chart  
+            drawChart(ctx, canvas.width / 2 + 20, 40, chartWidth, chartHeight,
+                     window.dqnAgent.rewardHistory, "Average Reward", "#4ecdc4");
+        }
+        
+        function drawChart(ctx, x, y, width, height, data, title, color) {
+            // Background
+            ctx.fillStyle = "white";
+            ctx.strokeStyle = "#ddd";
+            ctx.lineWidth = 1;
+            ctx.fillRect(x, y, width, height);
+            ctx.strokeRect(x, y, width, height);
+            
+            // Title
+            ctx.fillStyle = "black";
+            ctx.font = "bold 14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(title, x + width/2, y - 10);
+            
+            if (data.length < 2) {
+                ctx.font = "12px Arial";
+                ctx.fillText("等待数据...", x + width/2, y + height/2);
+                return;
+            }
+            
+            // Find min/max
+            const minVal = Math.min(...data);
+            const maxVal = Math.max(...data);
+            const range = maxVal - minVal || 1;
+            
+            // Draw line
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            data.forEach((val, i) => {
+                const px = x + (i / (data.length - 1)) * width;
+                const py = y + height - ((val - minVal) / range) * height;
+                
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            
+            ctx.stroke();
+            
+            // Y-axis labels
+            ctx.fillStyle = "#666";
+            ctx.font = "10px Arial";
+            ctx.textAlign = "right";
+            ctx.fillText(maxVal.toFixed(2), x - 5, y + 5);
+            ctx.fillText(minVal.toFixed(2), x - 5, y + height - 5);
+        }
+
+        // Update DQN stats
+        function updateDQNStats() {
+            if (!window.dqnAgent) return;
+            
+            $("#learning-rate").text(window.dqnAgent.learningRate.toFixed(4));
+            $("#epsilon-value").text(window.dqnAgent.epsilon.toFixed(3));
+            $("#replay-size").text(window.dqnAgent.replayBuffer.length);
+            $("#current-loss").text(window.dqnAgent.currentLoss.toFixed(4));
+            $("#train-steps").text(window.dqnAgent.trainStep);
+            
+            const avgReward = window.dqnAgent.rewardHistory.length > 0 ? 
+                window.dqnAgent.rewardHistory.reduce((a, b) => a + b, 0) / window.dqnAgent.rewardHistory.length : 0;
+            $("#avg-reward").text(avgReward.toFixed(2));
+        }
+
+        // Main game loop updates
         gameLoop.eachFrame(function (gameState) {
-            // 更新统计面板（只有在可见时）
+            // Update statistics panel
             if (panel.is(":visible")) {
                 var newRound = gameState.round;
                 if (round !== newRound) {
@@ -220,200 +1025,34 @@
                     averageScoreSpan.text(averageScore);
                 }
 
-                var newQLState = updateQL.Q ? Object.keys(updateQL.Q).length : 0;
+                var newQLState = updateQL.Q ? Object.keys(updateQL.Q).length : 
+                                (window.dqnAgent ? window.dqnAgent.replayBuffer.length : 0);
                 if (qlState !== newQLState) {
                     qlState = newQLState;
                     qlStateSpan.text(qlState);
                 }
             }
 
-            // Update Q-table visualization if enabled (独立于统计面板)
+            // Process DQN
+            if (window.dqnAgent && window.dqnAgent.enabled) {
+                gameState = window.dqnAgent.processGameState(gameState);
+                updateDQNStats();
+            }
+
+            // Update Q-table visualization
             if (showQTable) {
                 renderQTableVisualization();
             }
+            
+            // Update DQN visualizations
+            if (showDQNNetwork) {
+                renderDQNNetwork();
+            }
+            
+            if (showDQNCharts) {
+                renderDQNCharts();
+            }
         });
-
-        // Q-table visualization function
-        function renderQTableVisualization() {
-            var canvas = document.getElementById("qtable-canvas");
-            var ctx = canvas.getContext("2d");
-            
-            // Clear canvas
-            ctx.fillStyle = "#f8f8f8";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            if (!updateQL.Q || Object.keys(updateQL.Q).length === 0) {
-                // Draw empty grid with bird position
-                drawBirdAndAxes(ctx, canvas);
-                
-                // 显示提示信息
-                ctx.fillStyle = "black";
-                ctx.font = "16px Arial";
-                ctx.fillText("等待Q-learning数据...", canvas.width/2 - 80, 50);
-                ctx.font = "12px Arial";
-                ctx.fillText("请启用Q-learning并让AI训练一段时间", canvas.width/2 - 120, 70);
-                return;
-            }
-            
-            // Define grid parameters - 更精细的网格
-            var gridWidth = 80;   // 水平格子数（管道位置）
-            var gridHeight = 50;  // 垂直格子数（垂直距离）
-            var cellWidth = canvas.width / gridWidth;
-            var cellHeight = canvas.height / gridHeight;
-            
-            // 找到状态空间的范围来优化映射
-            var xStates = [], yStates = [];
-            Object.keys(updateQL.Q).forEach(function(state) {
-                var parts = state.split(',');
-                xStates.push(parseInt(parts[0]));
-                yStates.push(parseInt(parts[1]));
-            });
-            
-            // 使用兼容的方式计算最值
-            var xMin = xStates.length > 0 ? Math.min.apply(Math, xStates) - 2 : -10;
-            var xMax = xStates.length > 0 ? Math.max.apply(Math, xStates) + 2 : 10;
-            var yMin = yStates.length > 0 ? Math.min.apply(Math, yStates) - 2 : -10;
-            var yMax = yStates.length > 0 ? Math.max.apply(Math, yStates) + 2 : 10;
-            
-            // Process each state in Q-table
-            Object.keys(updateQL.Q).forEach(function(stateStr) {
-                var stateParts = stateStr.split(',');
-                var xState = parseInt(stateParts[0]);  // 管道位置状态
-                var yState = parseInt(stateParts[1]);  // 垂直距离状态
-                
-                // 修复方向映射：小鸟下落时，色块向上移动
-                var gridX = Math.min(Math.max(xState + 25, 0), gridWidth - 1);
-                var gridY = Math.min(Math.max(yState + 25, 0), gridHeight - 1);  // 正向映射：yState减少时gridY减少（向上）
-                
-                // 计算决策倾向：Q(jump) - Q(stay)
-                var jumpQ = updateQL.Q[stateStr][1];    // 跳跃的Q值
-                var stayQ = updateQL.Q[stateStr][0];    // 不跳跃的Q值
-                var decisionValue = jumpQ - stayQ;      // 正值=应该跳跃，负值=不应该跳跃
-                
-                // 根据决策倾向确定颜色
-                var color = getDecisionColor(decisionValue);
-                
-                // Draw cell
-                ctx.fillStyle = color;
-                ctx.fillRect(
-                    gridX * cellWidth, 
-                    gridY * cellHeight, 
-                    cellWidth, 
-                    cellHeight
-                );
-                
-                // Draw subtle border
-                ctx.strokeStyle = "#ddd";
-                ctx.lineWidth = 0.3;
-                ctx.strokeRect(
-                    gridX * cellWidth, 
-                    gridY * cellHeight, 
-                    cellWidth, 
-                    cellHeight
-                );
-            });
-            
-            // 绘制小鸟和坐标轴
-            drawBirdAndAxes(ctx, canvas);
-            
-            // 显示状态数量信息
-            ctx.fillStyle = "black";
-            ctx.font = "12px Arial";
-            ctx.fillText("Q表状态数: " + Object.keys(updateQL.Q).length, 10, 20);
-        }
-        
-        function drawBirdAndAxes(ctx, canvas) {
-            var gridWidth = 80;
-            var gridHeight = 50;
-            var cellWidth = canvas.width / gridWidth;
-            var cellHeight = canvas.height / gridHeight;
-            
-            // 小鸟的位置（网格坐标）- 对应映射逻辑中的基准点
-            var birdGridX = 25;  // 对应 xState=0 的位置
-            var birdGridY = 25;  // 对应 yState=0 的位置
-            var birdX = birdGridX * cellWidth + cellWidth/2;
-            var birdY = birdGridY * cellHeight + cellHeight/2;
-            
-            // 画小鸟
-            ctx.fillStyle = "#FFD700";
-            ctx.strokeStyle = "#FF8C00";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(birdX, birdY, 8, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.stroke();
-            
-            // 画小鸟的眼睛
-            ctx.fillStyle = "black";
-            ctx.beginPath();
-            ctx.arc(birdX + 3, birdY - 2, 2, 0, 2 * Math.PI);
-            ctx.fill();
-            
-            // 画参考线（十字线）
-            ctx.strokeStyle = "#666";
-            ctx.lineWidth = 1;
-            ctx.setLineDash([5, 5]);
-            
-            // 垂直参考线
-            ctx.beginPath();
-            ctx.moveTo(birdX, 0);
-            ctx.lineTo(birdX, canvas.height);
-            ctx.stroke();
-            
-            // 水平参考线
-            ctx.beginPath();
-            ctx.moveTo(0, birdY);
-            ctx.lineTo(canvas.width, birdY);
-            ctx.stroke();
-            
-            ctx.setLineDash([]);
-            
-            // 坐标轴标签
-            ctx.fillStyle = "black";
-            ctx.font = "bold 14px Arial";
-            ctx.fillText("🐦 Bird", birdX - 20, birdY - 15);
-            
-            ctx.font = "12px Arial";
-            ctx.fillText("管道水平距离 →", canvas.width - 120, canvas.height - 10);
-            
-            ctx.save();
-            ctx.translate(15, canvas.height / 2);
-            ctx.rotate(-Math.PI / 2);
-            ctx.fillText("管道相对小鸟位置 ↑", 0, 0);
-            ctx.restore();
-            
-            // 在下方也加一个标签
-            ctx.fillText("管道相对更下方", 15, canvas.height - 30);
-            
-            // 添加说明文字
-            ctx.font = "10px Arial";
-            ctx.fillStyle = "#666";
-            ctx.fillText("小鸟下落时，色块向上移动", canvas.width - 180, 20);
-            ctx.fillText("表示管道相对位置上升", canvas.width - 160, 35);
-            ctx.fillText("横轴：管道水平距离", canvas.width - 140, 50);
-        }
-        
-        function getDecisionColor(decisionValue) {
-            // decisionValue = Q(jump) - Q(stay)
-            // 正值 = 建议跳跃 = 红色
-            // 负值 = 建议不跳跃 = 蓝色
-            // 接近0 = 无所谓 = 灰色
-            
-            var threshold = 2; // 判断阈值
-            
-            if (decisionValue > threshold) {
-                // 强烈建议跳跃 - 纯红色
-                var intensity = Math.min(255, Math.max(150, Math.abs(decisionValue) * 10));
-                return `rgb(${intensity}, 0, 0)`;
-            } else if (decisionValue < -threshold) {
-                // 强烈建议不跳跃 - 纯蓝色
-                var intensity = Math.min(255, Math.max(150, Math.abs(decisionValue) * 10));
-                return `rgb(0, 0, ${intensity})`;
-            } else {
-                // 中性决策 - 灰色
-                return `rgb(160, 160, 160)`;
-            }
-        }
 
         gameLoop.start();
     </script>
