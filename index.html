@@ -602,10 +602,10 @@
             processGameState(gameState) {
                 if (!this.enabled) return gameState;
 
-                const currentState = this.getState(gameState);
-                if (!currentState) return gameState;
-
                 if (gameState.mode === "playing") {
+                    const currentState = this.getState(gameState);
+                    if (!currentState) return gameState;
+
                     // Select action
                     const action = this.selectAction(currentState);
                     
@@ -632,7 +632,7 @@
                         this.totalReward += reward;
                     }
 
-                    // Train the network
+                    // Train the network (async but don't wait)
                     this.train();
 
                     // Update reward history
@@ -644,7 +644,11 @@
                     this.lastAction = null;
                     this.totalReward = 0;
 
-                    // Auto restart
+                    // Auto restart - 模仿Q-learning的重启逻辑
+                    gameState = jump(gameState);
+                    
+                } else if (gameState.mode === "ready") {
+                    // 如果在ready状态，也需要自动开始
                     gameState = jump(gameState);
                 }
 
@@ -1003,6 +1007,52 @@
             $("#avg-reward").text(avgReward.toFixed(2));
         }
 
+        // 重写gameLoop函数以集成DQN
+        var originalGameLoop = window.gameLoop;
+        
+        function gameLoopWithDQN() {
+            if (!gameLoopWithDQN.timeScale) {
+                gameLoopWithDQN.timeScale = 1;
+                gameLoopWithDQN.frameCount = 0;
+                gameLoopWithDQN.lastTime = (new Date).getTime();
+            }
+
+            // 更新游戏状态
+            gameState = update(gameState, gameLoopWithDQN.frameCount++);
+            
+            // DQN处理 - 在render之前，就像Q-learning一样
+            if (window.dqnAgent && window.dqnAgent.enabled) {
+                gameState = window.dqnAgent.processGameState(gameState);
+            }
+            
+            // 渲染游戏
+            render(gameState);
+
+            // draw fps
+            var curTime = (new Date).getTime();
+            var lastTime = gameLoopWithDQN.lastTime;
+            gameLoopWithDQN.lastTime = curTime;
+            render.ctx.fillText(Math.floor(1000 / (curTime - lastTime)) + 'fps', 15, 25);
+
+            // 调用原始的eachFrame回调
+            gameLoop.eachFrame.update(gameState);
+
+            setTimeout(gameLoopWithDQN, inverseDefaultFPS / gameLoopWithDQN.timeScale);
+        }
+
+        // 继承原始gameLoop的属性
+        gameLoopWithDQN.timeScale = 1;
+        gameLoopWithDQN.eachFrame = gameLoop.eachFrame;
+        gameLoopWithDQN.start = function() {
+            setTimeout(gameLoopWithDQN, inverseDefaultFPS);
+        };
+
+        // 替换全局gameLoop
+        window.gameLoop = gameLoopWithDQN;
+
+        // 删除钩子函数，不再需要
+        // window.dqnProcessHook = function(gameState) { ... };
+
         // Main game loop updates
         gameLoop.eachFrame(function (gameState) {
             // Update statistics panel
@@ -1033,9 +1083,8 @@
                 }
             }
 
-            // Process DQN
+            // Update DQN stats
             if (window.dqnAgent && window.dqnAgent.enabled) {
-                gameState = window.dqnAgent.processGameState(gameState);
                 updateDQNStats();
             }
 
