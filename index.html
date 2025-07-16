@@ -26,6 +26,43 @@
             margin: 10px 0;
         }
         
+        .params-panel {
+            margin: 15px 0;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            display: none;
+        }
+        
+        .param-row {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .param-label {
+            flex: 1;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .param-slider {
+            flex: 2;
+            margin: 0 10px;
+        }
+        
+        .param-value {
+            flex: 0.5;
+            text-align: center;
+            font-family: monospace;
+            background-color: white;
+            padding: 2px 8px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        
         .legend {
             margin: 10px 0;
             font-size: 12px;
@@ -90,6 +127,14 @@
                     <td>Number of Q-learning States</td>
                     <td> <span id="qstate-span">0</span></td>
                 </tr>
+                <tr>
+                    <td>Current Learning Rate (α)</td>
+                    <td> <span id="current-alpha">0.60</span></td>
+                </tr>
+                <tr>
+                    <td>Current Exploration Rate (ε)</td>
+                    <td> <span id="current-epsilon">0.00</span></td>
+                </tr>
             </tbody>
         </table>
 
@@ -103,6 +148,48 @@
         
         <div class="qtable-controls">
             <button id="qtable-btn" class="ui basic button">Show Q-table Visualization</button>
+            <button id="params-btn" class="ui basic button">调整学习参数</button>
+        </div>
+        
+        <div id="params-panel" class="params-panel">
+            <h4 style="margin-top: 0;">Q-learning 参数调整</h4>
+            
+            <div class="param-row">
+                <span class="param-label">学习率 (α)</span>
+                <input type="range" class="param-slider" id="alpha-slider" min="0.05" max="0.8" step="0.05" value="0.2">
+                <span class="param-value" id="alpha-value">0.20</span>
+            </div>
+            
+            <div class="param-row">
+                <span class="param-label">探索率 (ε)</span>
+                <input type="range" class="param-slider" id="epsilon-slider" min="0" max="0.2" step="0.01" value="0.05">
+                <span class="param-value" id="epsilon-value">0.05</span>
+            </div>
+            
+            <div class="param-row">
+                <span class="param-label">死亡惩罚</span>
+                <input type="range" class="param-slider" id="deadreward-slider" min="-50" max="-5" step="1" value="-15">
+                <span class="param-value" id="deadreward-value">-15</span>
+            </div>
+            
+            <div class="param-row">
+                <span class="param-label">折扣因子 (γ)</span>
+                <input type="range" class="param-slider" id="gamma-slider" min="0.5" max="0.99" step="0.01" value="0.8">
+                <span class="param-value" id="gamma-value">0.80</span>
+            </div>
+            
+            <div style="margin-top: 15px; text-align: center;">
+                <button id="reset-params-btn" class="ui basic button">恢复默认值</button>
+                <button id="apply-params-btn" class="ui primary button">应用设置</button>
+            </div>
+            
+            <div style="margin-top: 15px; font-size: 11px; color: #666; line-height: 1.4;">
+                <strong>参数说明：</strong><br>
+                • <strong>学习率</strong>：控制学习速度，过高会不稳定，过低学得慢<br>
+                • <strong>探索率</strong>：随机尝试的概率，防止陷入局部最优<br>
+                • <strong>死亡惩罚</strong>：撞击的负面奖励，过大会让AI过度谨慎<br>
+                • <strong>折扣因子</strong>：未来奖励的重要性，影响长期策略
+            </div>
         </div>
         
         <canvas id="qtable-canvas" width="800" height="500"></canvas>
@@ -188,6 +275,75 @@
             }
         });
 
+        // Parameters control panel
+        var paramsPanel = $("#params-panel");
+        var paramsBtn = $("#params-btn");
+        var showParams = false;
+
+        $("#params-btn").click(function () {
+            showParams = !showParams;
+            if (showParams) {
+                paramsPanel.show();
+                paramsBtn.text("隐藏参数设置");
+            } else {
+                paramsPanel.hide();
+                paramsBtn.text("调整学习参数");
+            }
+        });
+
+        // Parameter sliders - real-time value display
+        $("#alpha-slider").on("input", function() {
+            $("#alpha-value").text(parseFloat(this.value).toFixed(2));
+        });
+
+        $("#epsilon-slider").on("input", function() {
+            $("#epsilon-value").text(parseFloat(this.value).toFixed(2));
+        });
+
+        $("#deadreward-slider").on("input", function() {
+            $("#deadreward-value").text(parseInt(this.value));
+        });
+
+        $("#gamma-slider").on("input", function() {
+            $("#gamma-value").text(parseFloat(this.value).toFixed(2));
+        });
+
+        // Apply parameters to core.js variables
+        $("#apply-params-btn").click(function() {
+            // 更新core.js中的全局变量
+            window.qlAlpha = parseFloat($("#alpha-slider").val());
+            window.qlEpsilon = parseFloat($("#epsilon-slider").val());
+            window.qlDeadReward = parseInt($("#deadreward-slider").val());
+            window.qlGamma = parseFloat($("#gamma-slider").val());
+            
+            // 如果core.js有这些变量，直接更新它们
+            if (typeof qlAlpha !== 'undefined') qlAlpha = window.qlAlpha;
+            if (typeof qlEpsilon !== 'undefined') qlEpsilon = window.qlEpsilon;
+            if (typeof qlDeadReward !== 'undefined') qlDeadReward = window.qlDeadReward;
+            if (typeof qlGamma !== 'undefined') qlGamma = window.qlGamma;
+            
+            alert("参数已应用！\n学习率: " + window.qlAlpha + 
+                  "\n探索率: " + window.qlEpsilon + 
+                  "\n死亡惩罚: " + window.qlDeadReward + 
+                  "\n折扣因子: " + window.qlGamma);
+        });
+
+        // Reset to default values
+        $("#reset-params-btn").click(function() {
+            $("#alpha-slider").val(0.2).trigger("input");
+            $("#epsilon-slider").val(0.05).trigger("input");
+            $("#deadreward-slider").val(-15).trigger("input");
+            $("#gamma-slider").val(0.8).trigger("input");
+        });
+
+        // Initialize with optimized default parameters on page load
+        $(document).ready(function() {
+            // 自动应用优化后的默认参数
+            setTimeout(function() {
+                $("#apply-params-btn").click();
+            }, 1000);
+        });
+
         var fpsSpan = $("#fps-span");
         var roundSpan = $("#round-span");
         var maxScoreSpan = $("#mscore-span");
@@ -225,6 +381,10 @@
                     qlState = newQLState;
                     qlStateSpan.text(qlState);
                 }
+
+                // Update current parameter display
+                $("#current-alpha").text((typeof qlAlpha !== 'undefined' ? qlAlpha : 0.6).toFixed(2));
+                $("#current-epsilon").text((typeof qlEpsilon !== 'undefined' ? qlEpsilon : 0).toFixed(2));
             }
 
             // Update Q-table visualization if enabled (独立于统计面板)
