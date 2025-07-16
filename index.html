@@ -53,14 +53,14 @@
             margin: 0 10px;
         }
         
-        .param-value {
-            flex: 0.5;
+        .param-input {
+            flex: 0.8;
             text-align: center;
             font-family: monospace;
-            background-color: white;
-            padding: 2px 8px;
+            padding: 4px 8px;
             border: 1px solid #ccc;
             border-radius: 3px;
+            margin-left: 5px;
         }
         
         .legend {
@@ -156,26 +156,26 @@
             
             <div class="param-row">
                 <span class="param-label">学习率 (α)</span>
-                <input type="range" class="param-slider" id="alpha-slider" min="0.05" max="0.8" step="0.05" value="0.2">
-                <span class="param-value" id="alpha-value">0.20</span>
+                <input type="range" class="param-slider" id="alpha-slider" min="0.05" max="0.8" step="0.05" value="0.4">
+                <input type="number" class="param-input" id="alpha-input" min="0.05" max="0.8" step="0.05" value="0.4">
             </div>
             
             <div class="param-row">
                 <span class="param-label">探索率 (ε)</span>
                 <input type="range" class="param-slider" id="epsilon-slider" min="0" max="0.2" step="0.01" value="0.05">
-                <span class="param-value" id="epsilon-value">0.05</span>
+                <input type="number" class="param-input" id="epsilon-input" min="0" max="0.2" step="0.01" value="0.05">
             </div>
             
             <div class="param-row">
                 <span class="param-label">死亡惩罚</span>
-                <input type="range" class="param-slider" id="deadreward-slider" min="-50" max="-5" step="1" value="-15">
-                <span class="param-value" id="deadreward-value">-15</span>
+                <input type="range" class="param-slider" id="deadreward-slider" min="-150" max="-5" step="1" value="-30">
+                <input type="number" class="param-input" id="deadreward-input" min="-150" max="-5" step="1" value="-30">
             </div>
             
             <div class="param-row">
                 <span class="param-label">折扣因子 (γ)</span>
                 <input type="range" class="param-slider" id="gamma-slider" min="0.5" max="0.99" step="0.01" value="0.8">
-                <span class="param-value" id="gamma-value">0.80</span>
+                <input type="number" class="param-input" id="gamma-input" min="0.5" max="0.99" step="0.01" value="0.8">
             </div>
             
             <div style="margin-top: 15px; text-align: center;">
@@ -185,10 +185,11 @@
             
             <div style="margin-top: 15px; font-size: 11px; color: #666; line-height: 1.4;">
                 <strong>参数说明：</strong><br>
-                • <strong>学习率</strong>：控制学习速度，过高会不稳定，过低学得慢<br>
-                • <strong>探索率</strong>：随机尝试的概率，防止陷入局部最优<br>
-                • <strong>死亡惩罚</strong>：撞击的负面奖励，过大会让AI过度谨慎<br>
-                • <strong>折扣因子</strong>：未来奖励的重要性，影响长期策略
+                • <strong>学习率</strong>：控制学习速度，0.3-0.5学得快，0.1-0.2更稳定<br>
+                • <strong>探索率</strong>：随机尝试的概率，0.05-0.1可防止陷入局部最优<br>
+                • <strong>死亡惩罚</strong>：撞击的负面奖励，-20到-50之间比较合适<br>
+                • <strong>折扣因子</strong>：未来奖励的重要性，通常保持0.8-0.9<br>
+                <strong>快速学习</strong>：α=0.5, 死亡惩罚=-50 | <strong>稳定学习</strong>：α=0.2, 死亡惩罚=-20
             </div>
         </div>
         
@@ -291,30 +292,54 @@
             }
         });
 
-        // Parameter sliders - real-time value display
+        // Parameter sliders and inputs - bidirectional sync
         $("#alpha-slider").on("input", function() {
-            $("#alpha-value").text(parseFloat(this.value).toFixed(2));
+            $("#alpha-input").val(parseFloat(this.value).toFixed(2));
+        });
+        
+        $("#alpha-input").on("input", function() {
+            var val = Math.max(0.05, Math.min(0.8, parseFloat(this.value)));
+            this.value = val.toFixed(2);
+            $("#alpha-slider").val(val);
         });
 
         $("#epsilon-slider").on("input", function() {
-            $("#epsilon-value").text(parseFloat(this.value).toFixed(2));
+            $("#epsilon-input").val(parseFloat(this.value).toFixed(2));
+        });
+        
+        $("#epsilon-input").on("input", function() {
+            var val = Math.max(0, Math.min(0.2, parseFloat(this.value)));
+            this.value = val.toFixed(2);
+            $("#epsilon-slider").val(val);
         });
 
         $("#deadreward-slider").on("input", function() {
-            $("#deadreward-value").text(parseInt(this.value));
+            $("#deadreward-input").val(parseInt(this.value));
+        });
+        
+        $("#deadreward-input").on("input", function() {
+            var val = Math.max(-150, Math.min(-5, parseInt(this.value)));
+            this.value = val;
+            $("#deadreward-slider").val(val);
         });
 
         $("#gamma-slider").on("input", function() {
-            $("#gamma-value").text(parseFloat(this.value).toFixed(2));
+            $("#gamma-input").val(parseFloat(this.value).toFixed(2));
+        });
+        
+        $("#gamma-input").on("input", function() {
+            var val = Math.max(0.5, Math.min(0.99, parseFloat(this.value)));
+            this.value = val.toFixed(2);
+            $("#gamma-slider").val(val);
         });
 
         // Apply parameters to core.js variables
         $("#apply-params-btn").click(function() {
-            // 更新core.js中的全局变量
-            window.qlAlpha = parseFloat($("#alpha-slider").val());
-            window.qlEpsilon = parseFloat($("#epsilon-slider").val());
-            window.qlDeadReward = parseInt($("#deadreward-slider").val());
-            window.qlGamma = parseFloat($("#gamma-slider").val());
+            // 从输入框读取值并更新core.js中的全局变量
+            window.qlAlpha = parseFloat($("#alpha-input").val());
+            window.qlEpsilon = parseFloat($("#epsilon-input").val());
+            window.qlDeadReward = parseInt($("#deadreward-input").val());
+            window.qlGamma = parseFloat($("#gamma-input").val());
             
             // 如果core.js有这些变量，直接更新它们
             if (typeof qlAlpha !== 'undefined') qlAlpha = window.qlAlpha;
@@ -328,17 +353,17 @@
                   "\n折扣因子: " + window.qlGamma);
         });
 
-        // Reset to default values
+        // Reset to optimized default values (faster learning)
         $("#reset-params-btn").click(function() {
-            $("#alpha-slider").val(0.2).trigger("input");
+            $("#alpha-slider").val(0.4).trigger("input");
             $("#epsilon-slider").val(0.05).trigger("input");
-            $("#deadreward-slider").val(-15).trigger("input");
+            $("#deadreward-slider").val(-30).trigger("input");
             $("#gamma-slider").val(0.8).trigger("input");
         });
 
-        // Initialize with optimized default parameters on page load
+        // Initialize with balanced default parameters on page load
         $(document).ready(function() {
-            // 自动应用优化后的默认参数
+            // 自动应用平衡的默认参数（学习速度适中）
             setTimeout(function() {
                 $("#apply-params-btn").click();
             }, 1000);
