@@ -8,7 +8,7 @@
     <title>Flappy Bird Q-learning</title>
     <style>
         canvas {
-            margin-top: 35px;
+            margin-top: 15px;
             border: 4px solid #555;
             padding: 5px;
             border-radius: 10px;
@@ -44,21 +44,31 @@
             margin-right: 5px;
             vertical-align: middle;
         }
+        
+        .main-title {
+            margin: 20px 0;
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        footer {
+            margin-top: 40px;
+            width: 100%;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            padding: 20px 0;
+            border-top: 1px solid #eee;
+        }
     </style>
     <link href="https://cdn.bootcss.com/semantic-ui/2.2.10/semantic.min.css" rel="stylesheet">
 </head>
 
 <body>
-    <div class="ui menu">
-        <div class="item header">Flappy Bird Q-learning</div>
-        <div class="right menu">
-            <a href="https://github.com/Enhuiz/flappybird-ql" class="ui item">
-            View on GitHub &nbsp
-            <i class="alternate github icon"></i></a>
-        </div>
-    </div>
-
     <center>
+        <h1 class="main-title">Flappy Bird Q-learning 可视化演示</h1>
+        
         <canvas id="cvs" width="288" height="512"></canvas>
         <br>
 
@@ -99,11 +109,11 @@
         
         <div id="qtable-legend" class="legend" style="display: none;">
             <div class="legend-item">
-                <span class="legend-color" style="background-color: #0066cc;"></span>
+                <span class="legend-color" style="background-color: #0000cc;"></span>
                 <span>强烈建议不跳跃 (Don't Jump)</span>
             </div>
             <div class="legend-item">
-                <span class="legend-color" style="background-color: #888888;"></span>
+                <span class="legend-color" style="background-color: #a0a0a0;"></span>
                 <span>跳不跳都差不多 (Neutral)</span>
             </div>
             <div class="legend-item">
@@ -123,6 +133,10 @@
         <br>
 
     </center>
+
+    <footer>
+        © 2025 孙维刚教育研究院-陈硕老师 保留所有权利。
+    </footer>
 
     <script src="https://cdn.bootcss.com/jquery/2.2.4/jquery.min.js"></script>
     <script src="res/js/core.js"></script>
@@ -267,9 +281,9 @@
                 var xState = parseInt(stateParts[0]);  // 管道位置状态
                 var yState = parseInt(stateParts[1]);  // 垂直距离状态
                 
-                // 映射逻辑：让色块移动方向与小鸟移动方向一致
+                // 修复方向映射：小鸟下落时，色块向上移动
                 var gridX = Math.min(Math.max(xState + 25, 0), gridWidth - 1);
-                var gridY = Math.min(Math.max(-yState + 25, 0), gridHeight - 1);  // 负向映射，让方向直观
+                var gridY = Math.min(Math.max(yState + 25, 0), gridHeight - 1);  // 正向映射：yState减少时gridY减少（向上）
                 
                 // 计算决策倾向：Q(jump) - Q(stay)
                 var jumpQ = updateQL.Q[stateStr][1];    // 跳跃的Q值
@@ -314,7 +328,7 @@
             var cellWidth = canvas.width / gridWidth;
             var cellHeight = canvas.height / gridHeight;
             
-            // 小鸟的位置（网格坐标）- 对应映射逻辑
+            // 小鸟的位置（网格坐标）- 对应映射逻辑中的基准点
             var birdGridX = 25;  // 对应 xState=0 的位置
             var birdGridY = 25;  // 对应 yState=0 的位置
             var birdX = birdGridX * cellWidth + cellWidth/2;
@@ -365,42 +379,39 @@
             ctx.save();
             ctx.translate(15, canvas.height / 2);
             ctx.rotate(-Math.PI / 2);
-            ctx.fillText("管道垂直距离 ↑", 0, 0);
+            ctx.fillText("管道相对小鸟位置 ↑", 0, 0);
             ctx.restore();
+            
+            // 在下方也加一个标签
+            ctx.fillText("管道相对更下方", 15, canvas.height - 30);
             
             // 添加说明文字
             ctx.font = "10px Arial";
             ctx.fillStyle = "#666";
-            ctx.fillText("上方：管道在小鸟上方时的决策", canvas.width - 180, 20);
-            ctx.fillText("下方：管道在小鸟下方时的决策", canvas.width - 180, 35);
-            ctx.fillText("左右：管道的水平距离", canvas.width - 150, 50);
+            ctx.fillText("小鸟下落时，色块向上移动", canvas.width - 180, 20);
+            ctx.fillText("表示管道相对位置上升", canvas.width - 160, 35);
+            ctx.fillText("横轴：管道水平距离", canvas.width - 140, 50);
         }
         
         function getDecisionColor(decisionValue) {
             // decisionValue = Q(jump) - Q(stay)
-            // 正值越大 = 越应该跳跃 = 越红
-            // 负值越大 = 越不应该跳跃 = 越蓝
+            // 正值 = 建议跳跃 = 红色
+            // 负值 = 建议不跳跃 = 蓝色
             // 接近0 = 无所谓 = 灰色
             
-            var maxIntensity = 20; // 当差值超过这个值时，颜色达到最深
-            var normalizedValue = Math.max(-maxIntensity, Math.min(maxIntensity, decisionValue)) / maxIntensity;
+            var threshold = 2; // 判断阈值
             
-            if (normalizedValue > 0.1) {
-                // 建议跳跃 - 红色系
-                var intensity = Math.floor(255 * normalizedValue);
-                var green = Math.floor(100 * (1 - normalizedValue));
-                var blue = Math.floor(100 * (1 - normalizedValue));
-                return `rgb(${intensity}, ${green}, ${blue})`;
-            } else if (normalizedValue < -0.1) {
-                // 建议不跳跃 - 蓝色系
-                var intensity = Math.floor(255 * Math.abs(normalizedValue));
-                var red = Math.floor(100 * (1 - Math.abs(normalizedValue)));
-                var green = Math.floor(150 * (1 - Math.abs(normalizedValue)));
-                return `rgb(${red}, ${green}, ${intensity})`;
+            if (decisionValue > threshold) {
+                // 强烈建议跳跃 - 纯红色
+                var intensity = Math.min(255, Math.max(150, Math.abs(decisionValue) * 10));
+                return `rgb(${intensity}, 0, 0)`;
+            } else if (decisionValue < -threshold) {
+                // 强烈建议不跳跃 - 纯蓝色
+                var intensity = Math.min(255, Math.max(150, Math.abs(decisionValue) * 10));
+                return `rgb(0, 0, ${intensity})`;
             } else {
                 // 中性决策 - 灰色
-                var grayLevel = 180;
-                return `rgb(${grayLevel}, ${grayLevel}, ${grayLevel})`;
+                return `rgb(160, 160, 160)`;
             }
         }
 
